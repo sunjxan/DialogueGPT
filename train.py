@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from data import create_tokenizer, create_dataloader
-from GPT import GPT
+from DialogueGPT import DialogueGPT
 
 class Trainer:
     def __init__(self, model, train_loader, val_loader, criterion, optimizer, scheduler=None, config=None):
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     tokenizer = create_tokenizer()
     
     # 创建模型
-    model = GPT(tokenizer.vocab_size())
+    model = DialogueGPT(tokenizer.vocab_size())
     
     # 初始化参数
     model.init_parameters()
