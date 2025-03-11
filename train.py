@@ -80,7 +80,7 @@ class Trainer:
             input_ids = input_ids.to(self.device)
             
             # 生成掩码
-            mask = model.generate_mask(input_ids, self.config['pad_idx'])
+            mask = model.generate_mask(input_ids, self.config['pad_id'])
             
             # 梯度清零
             self.optimizer.zero_grad()
@@ -139,7 +139,7 @@ class Trainer:
             input_ids = input_ids.to(self.device)
             
             # 生成掩码
-            mask = model.generate_mask(input_ids, self.config['pad_idx'])
+            mask = model.generate_mask(input_ids, self.config['pad_id'])
             
             # 前向传播
             with torch.no_grad():
@@ -219,6 +219,8 @@ class Trainer:
 if __name__ == '__main__':
     # 初始化模型和数据加载器
     tokenizer = create_tokenizer()
+    pad_token = tokenizer.special_tokens_map['pad_token']
+    pad_id = tokenizer.convert_tokens_to_ids(pad_token)
     
     # 创建模型
     model = DialogueGPT(tokenizer.vocab_size())
@@ -227,7 +229,7 @@ if __name__ == '__main__':
     model.init_parameters()
     
     # 定义损失函数和优化器
-    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_id())  # 忽略padding位置的损失
+    criterion = nn.CrossEntropyLoss(ignore_index=pad_id)  # 忽略padding位置的损失
     optimizer = torch.optim.Adam(model.parameters(), lr=2.5e-4)
     
     train_loader = create_dataloader(tokenizer, batch_size=32, max_len=model.max_seq_len, shuffle=True, drop_last=True)
@@ -242,7 +244,7 @@ if __name__ == '__main__':
         'checkpoint': './checkpoints/checkpoint_best.pth',  # 可以指定预训练权重路径
         'print_interval_steps': 10,
         'save_interval_epochs': 5,
-        'pad_idx': tokenizer.pad_id()
+        'pad_id': pad_id
     }
     
     # 创建训练器
