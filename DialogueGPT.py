@@ -105,7 +105,10 @@ class DialogueGPT(nn.Module):
     2. 位置编码
     max_seq_len × d_model
     
-    3. 解码器（Decoder）
+    3. 角色编码
+    3 x d_model
+    
+    4. 解码器（Decoder）
     每层包含：
         1个多头注意力（相当于4个线性层，无偏置项）：4 × (d_model × d_model)
         前馈网络（2个线性层）：2 × d_model × d_ff + d_ff + d_model
@@ -114,7 +117,7 @@ class DialogueGPT(nn.Module):
     总参数量：
         num_decoder_layers × [4d² + 2d·d_ff + d_ff + 5d] + 2d
     
-    4. 生成器（Generator）
+    5. 生成器（Generator）
     weight共享嵌入层权重，无bias
 '''
 def count_parameters(model):

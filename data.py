@@ -79,9 +79,9 @@ class DialogueDataset(Dataset):
         for item in dialogue:
             role, content = item['role'], item['content']
             tokens = self.tokenizer.encode(content, add_special_tokens=False)
+            tokens.append(sep_id)
             input_ids.extend(tokens)
-            input_ids.append(sep_id)
-            role_ids.extend([role_map[role]] * (len(tokens) + 1))
+            role_ids.extend([role_map[role]] * len(tokens))
         
         return {
             "input_ids": input_ids,

@@ -60,7 +60,7 @@ if __name__ == '__main__':
     tokenizer = create_tokenizer()
     
     # 创建模型
-    model = DialogueGPT(tokenizer.vocab_size())
+    model = DialogueGPT(tokenizer.vocab_size)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)

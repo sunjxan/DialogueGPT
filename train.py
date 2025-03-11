@@ -3,6 +3,7 @@ import time
 import torch
 import torch.nn as nn
 
+from torch.functional import F
 from torch.utils.tensorboard import SummaryWriter
 
 from data import create_tokenizer, create_dataloader
@@ -62,11 +63,11 @@ class Trainer:
     
     def _save_computation_graph(self):
         """保存模型计算图到TensorBoard"""
-        input_ids = next(iter(self.train_loader))
+        input_ids, role_ids = next(iter(self.train_loader))
         input_shape = input_ids.shape[1:]
         dummy_input = torch.zeros(1, *input_shape).long().to(self.device)
         dummy_mask = torch.zeros(1, *input_shape, *input_shape).bool().to(self.device)
-        self.writer.add_graph(self.model, (dummy_input, dummy_mask))
+        self.writer.add_graph(self.model, (dummy_input, dummy_input, dummy_mask))
     
     def train_epoch(self, epoch):
         """训练单个epoch"""
@@ -74,10 +75,11 @@ class Trainer:
         total_loss = 0.0
         start_time = time.time()
         
-        for batch_idx, input_ids in enumerate(self.train_loader):
+        for batch_idx, (input_ids, role_ids) in enumerate(self.train_loader):
             iter_start_time = time.time()
             
             input_ids = input_ids.to(self.device)
+            role_ids = role_ids.to(self.device)
             
             # 生成掩码
             mask = model.generate_mask(input_ids, self.config['pad_id'])
@@ -88,6 +90,7 @@ class Trainer:
             # 前向传播
             output = model(
                 input_ids=input_ids[:, :-1],  # 解码器输入去尾
+                role_ids=role_ids[:, :-1],
                 mask=mask[:, :-1, :-1]
             )
             
@@ -135,8 +138,9 @@ class Trainer:
         total_loss = 0.0
         start_time = time.time()
         
-        for input_ids in self.val_loader:
+        for input_ids, role_ids in self.val_loader:
             input_ids = input_ids.to(self.device)
+            role_ids = role_ids.to(self.device)
             
             # 生成掩码
             mask = model.generate_mask(input_ids, self.config['pad_id'])
@@ -145,13 +149,15 @@ class Trainer:
             with torch.no_grad():
                 output = model(
                     input_ids=input_ids[:, :-1],  # 解码器输入去尾
+                    role_ids=role_ids[:, :-1],
                     mask=mask[:, :-1, :-1]
                 )
             
             # 计算损失
             loss = self.criterion(
                 output.contiguous().view(-1, output.size(-1)),
-                input_ids[:, 1:].contiguous().view(-1)  # 目标去头
+                input_ids[:, 1:].contiguous().view(-1),  # 目标去头
+                role_ids[:, 1:].contiguous().view(-1)
             )
             
             total_loss += loss.item()
@@ -223,13 +229,21 @@ if __name__ == '__main__':
     pad_id = tokenizer.convert_tokens_to_ids(pad_token)
     
     # 创建模型
-    model = DialogueGPT(tokenizer.vocab_size())
+    model = DialogueGPT(tokenizer.vocab_size)
     
     # 初始化参数
     model.init_parameters()
     
-    # 定义损失函数和优化器
-    criterion = nn.CrossEntropyLoss(ignore_index=pad_id)  # 忽略padding位置的损失
+    # 只计算机器人回复部分的损失（用户发言设为ignore_index）
+    def masked_loss(logits, targets, role_ids):
+        mask = (role_ids == 2) & (targets != pad_id)
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1)),
+            targets.view(-1),
+            reduction='none'
+        )
+        return (loss * mask.view(-1).float()).mean()
+
     optimizer = torch.optim.Adam(model.parameters(), lr=2.5e-4)
     
     train_loader = create_dataloader(tokenizer, batch_size=32, max_len=model.max_seq_len, shuffle=True, drop_last=True)
@@ -252,7 +266,7 @@ if __name__ == '__main__':
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
-        criterion=criterion,
+        criterion=masked_loss,
         optimizer=optimizer,
         config=config
     )
