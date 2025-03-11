@@ -10,7 +10,7 @@ from data import create_tokenizer, create_dataloader
 from DialogueGPT import DialogueGPT
 
 class Trainer:
-    def __init__(self, model, train_loader, val_loader, criterion, optimizer, scheduler=None, config=None):
+    def __init__(self, model, train_loader, val_loader, criterion, calc_accuracy, optimizer, scheduler=None, config=None):
         """
         初始化训练器
         Args:
@@ -18,6 +18,7 @@ class Trainer:
             train_loader: 训练数据加载器
             val_loader: 验证数据加载器
             criterion: 损失函数
+            calc_accuracy: 计算准确率函数
             optimizer: 优化器
             scheduler: 学习率调度器 (可选)
             config: 配置字典，包含以下参数：
@@ -31,6 +32,7 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
+        self.calc_accuracy = calc_accuracy
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.config = config
@@ -137,6 +139,7 @@ class Trainer:
         """验证模型"""
         self.model.eval()
         total_loss = 0.0
+        accuracy_correct = accuracy_total = 0
         start_time = time.time()
         
         for input_ids, role_ids in self.val_loader:
@@ -162,12 +165,22 @@ class Trainer:
             )
             
             total_loss += loss.item()
+            
+            correct, total = self.calc_accuracy(
+                output.contiguous().view(-1, output.size(-1)),
+                input_ids[:, 1:].contiguous().view(-1),  # 目标去头
+                role_ids[:, 1:].contiguous().view(-1)
+            )
+            accuracy_correct += correct
+            accuracy_total += total
         
         avg_loss = total_loss / len(self.val_loader)
+        accuracy = accuracy_correct / accuracy_total if accuracy_total else 0
         epoch_time = time.time() - start_time
         
         # TensorBoard记录
         self.writer.add_scalar('val/loss', avg_loss, epoch)
+        self.writer.add_scalar('val/accuracy', accuracy, epoch)
         self.writer.add_scalar('val/time', epoch_time, epoch)
         
         # 保存最佳模型
@@ -176,13 +189,13 @@ class Trainer:
             self.save_checkpoint('checkpoint_best.pth')
             torch.save(model, 'best_model.pth')
         
-        return avg_loss, epoch_time
+        return avg_loss, accuracy, epoch_time
     
     def train(self):
         """完整训练流程"""
         for epoch in range(1, self.epochs + 1):
             train_loss, train_time = self.train_epoch(epoch)
-            val_loss, val_time = self.validate(epoch)
+            val_loss, accuracy, val_time = self.validate(epoch)
             
             # 更新学习率
             if self.scheduler is not None:
@@ -193,7 +206,7 @@ class Trainer:
             
             # 打印日志
             print(f'\nEpoch: {epoch}/{self.epochs} Train Loss: {train_loss:.4f} Time: {train_time:.3f}s | '
-                  f'Val Loss: {val_loss:.4f} Time: {val_time:.3f}s\n')
+                  f'Val Loss: {val_loss:.4f} Accuracy: {100*accuracy:.2f}% Time: {val_time:.3f}s\n')
             
             # 定期保存模型
             if (epoch - 1) % self.save_interval_epochs == 0:
@@ -236,14 +249,20 @@ if __name__ == '__main__':
     model.init_parameters()
     
     # 只计算机器人回复部分的损失（用户发言设为ignore_index）
-    def masked_loss(logits, targets, role_ids):
-        mask = (role_ids == 2) & (targets != pad_id)
+    def masked_loss(logits, labels, role_ids):
+        mask = (role_ids == 2) & (labels != pad_id)
         loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)),
-            targets.view(-1),
+            labels.view(-1),
             reduction='none'
         )
         return (loss * mask.view(-1).float()).mean()
+    
+    def calc_accuracy(logits, labels, role_ids):
+        preds = torch.argmax(logits, dim=-1)
+        mask = (role_ids == 2) & (labels != pad_id)
+        correct = (preds[mask] == labels[mask]).sum().item()
+        return correct, mask.sum().item()
     
     # 定义优化器
     optimizer = torch.optim.AdamW(
@@ -282,6 +301,7 @@ if __name__ == '__main__':
         train_loader=train_loader,
         val_loader=val_loader,
         criterion=masked_loss,
+        calc_accuracy=calc_accuracy,
         optimizer=optimizer,
         scheduler=scheduler,
         config=config
