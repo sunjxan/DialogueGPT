@@ -1,53 +1,59 @@
 import os
 import re
+import json
 import torch
-import sentencepiece as spm
 
+from zhconv import convert
+from transformers import AutoTokenizer
 from datasets import load_dataset
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 corpus_file = 'cleaned_corpus.txt'
-model_prefix = 'spm_chinese'
+model_dirname = 'tokenizer_chinese'
 
 def clean_text(text):
-    # 去除特殊字符
-    text = re.sub(r'[�◆★【】▲▼■●]', '', text)
-    # 合并连续空格
-    text = re.sub(r'\s+', ' ', text)
-    # 过滤短文本
-    if len(text) < 20:
-        return None
-    return text.strip()
+    # 定义正则表达式模式匹配对话块
+    pattern = r'<\|start_header_id\|>(.*?)<\|end_header_id\|>\n\n(.*?)<\|eot_id\|>'
+    
+    # 查找所有匹配项
+    matches = re.findall(pattern, text, re.DOTALL)
+    
+    # 初始化结果列表和临时存储
+    result = []
+    last_role = last_content = None
+    
+    for role, content in matches:
+        content = convert(content.strip(), 'zh-cn')
+        
+        if last_role == role:
+            last_content += '\n\n' + content
+        else:
+            if last_role:
+                result.append({"role": last_role, "content": last_content})
+            last_role, last_content = role, content
+    
+    if last_role:
+        result.append({"role": last_role, "content": last_content})       
+    return result
 
-if not os.path.exists(f"{model_prefix}.model"):
+if not os.path.exists(corpus_file):
     
-    if not os.path.exists(corpus_file):
-        
-        dataset = load_dataset('Delius/ChineseWebNovel', split='train')
-        
-        # 应用清洗并保存
-        with open(corpus_file, "w", encoding="utf-8") as f:
-            for example in dataset:
-                cleaned = clean_text(example["Response"])
-                if cleaned:
-                    f.write(cleaned + "\n")
+    dataset = load_dataset('neo-lin/chat_alpaca_chinese_llama_3.1', split='train')
     
-    spm.SentencePieceTrainer.train(
-        input=corpus_file,
-        model_prefix=model_prefix,
-        vocab_size=32000,
-        character_coverage=0.9995,
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        model_type='unigram',
-        user_defined_symbols=['<sep>', '<cls>']  # 自定义特殊符号
-    )
+    # 应用清洗并保存
+    with open(corpus_file, "w", encoding="utf-8") as f:
+        for example in dataset:
+            cleaned = clean_text(example["text"])
+            if cleaned:
+                f.write(json.dumps(cleaned, ensure_ascii=False) + "\n")
+
+if not os.path.exists(model_dirname):
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+    tokenizer.save_pretrained(model_dirname)
 
 def create_tokenizer():
-    return spm.SentencePieceProcessor(f"{model_prefix}.model")
+    return AutoTokenizer.from_pretrained(model_dirname)
 
 class TextDataset(Dataset):
     def __init__(self, file_path, tokenizer, max_len):

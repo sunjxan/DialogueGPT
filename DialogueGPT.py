@@ -26,16 +26,19 @@ class DialogueGPT(nn.Module):
         # 2. 位置编码
         self.position_emb = nn.Parameter(torch.randn(max_seq_len, d_model))
         
-        # 3. 解码器
+        # 3. 对话角色嵌入
+        self.role_emb = nn.Embedding(3, d_model)  # 0:系统 1:用户 2:机器人
+        
+        # 4. 解码器
         self.decoder = Decoder(num_layers, d_model, num_heads, d_ff, dropout)
         
-        # 4. 最终线性层
+        # 5. 最终线性层
         self.generator = nn.Linear(d_model, vocab_size, bias=False)
         
         # 权重绑定：输入嵌入和输出层共享权重
         self.embed.weight = self.generator.weight
     
-    def forward(self, input_ids, mask=None):
+    def forward(self, input_ids, role_ids, mask=None):
         """
         前向传播
         Args:
@@ -52,12 +55,15 @@ class DialogueGPT(nn.Module):
         
         # 2. 位置编码
         position_emb = self.position_emb[:seq_len]
-        memory = emb + position_emb  # (batch_size, seq_len, d_model)
+
+        # 3. 角色编码
+        role_emb = self.role_emb(role_ids)
+        memory = emb + position_emb + role_emb  # (batch_size, seq_len, d_model)
         
-        # 3. 解码器处理
+        # 4. 解码器处理
         decoder_output = self.decoder(memory, mask)  # (batch_size, seq_len, d_model)
         
-        # 4. 输出层映射到词表
+        # 5. 输出层映射到词表
         output = self.generator(decoder_output)  # (batch_size, seq_len, vocab_size)
         
         return output

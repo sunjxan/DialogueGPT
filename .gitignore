@@ -5,5 +5,4 @@ checkpoints
 *.pth
 *.ipynb
 *.txt
-*.model
-*.vocab
+*.json
