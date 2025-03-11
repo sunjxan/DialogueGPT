@@ -100,7 +100,7 @@ def collate_batch(batch, tokenizer, max_len):
     pad_id = tokenizer.convert_tokens_to_ids(pad_token)
     
     input_batch = pad_sequence(input_batch, batch_first=True, padding_value=pad_id)
-    role_batch = pad_sequence(role_batch, batch_first=True, padding_value=-1)
+    role_batch = pad_sequence(role_batch, batch_first=True, padding_value=0)
     return input_batch, role_batch
 
 def create_dataloader(tokenizer, batch_size, max_len=512, shuffle=False, drop_last=False):

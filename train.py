@@ -97,7 +97,8 @@ class Trainer:
             # 计算损失
             loss = self.criterion(
                 output.contiguous().view(-1, output.size(-1)),
-                input_ids[:, 1:].contiguous().view(-1)  # 目标去头
+                input_ids[:, 1:].contiguous().view(-1),  # 目标去头
+                role_ids[:, 1:].contiguous().view(-1)
             )
             
             # 反向传播
@@ -243,8 +244,22 @@ if __name__ == '__main__':
             reduction='none'
         )
         return (loss * mask.view(-1).float()).mean()
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=2.5e-4)
+    
+    # 定义优化器
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=1e-4,
+        betas=(0.9, 0.98),
+        eps=1e-9,
+        weight_decay=0.01
+    )
+    
+    # 定义学习率调度器
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer,
+        step_size=1,
+        gamma=0.95
+    )
     
     train_loader = create_dataloader(tokenizer, batch_size=32, max_len=model.max_seq_len, shuffle=True, drop_last=True)
     val_loader = create_dataloader(tokenizer, batch_size=32, max_len=model.max_seq_len)
@@ -268,6 +283,7 @@ if __name__ == '__main__':
         val_loader=val_loader,
         criterion=masked_loss,
         optimizer=optimizer,
+        scheduler=scheduler,
         config=config
     )
     
