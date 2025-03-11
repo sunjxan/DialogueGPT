@@ -55,32 +55,55 @@ if not os.path.exists(model_dirname):
 def create_tokenizer():
     return AutoTokenizer.from_pretrained(model_dirname)
 
-class TextDataset(Dataset):
-    def __init__(self, file_path, tokenizer, max_len):
+class DialogueDataset(Dataset):
+    def __init__(self, file_path, tokenizer):
         self.data = []
+        self.tokenizer = tokenizer
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
-                tokens = tokenizer.encode(line.strip()) + [tokenizer.eos_id()]
-                for i in range(0, len(tokens), max_len):
-                    text = tokens[i:i+max_len]
-                    if len(text) > 1:
-                        self.data.append(text)
+                line = line.strip()
+                if line:
+                    self.data.append(json.loads(line))
     
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, idx):
-        return self.data[idx]
+        dialogue = self.data[idx]
+        input_ids = []
+        role_ids = []
+        role_map = {"system": 0, "user": 1, "assistant": 2}
+        
+        sep_token = self.tokenizer.special_tokens_map['sep_token']
+        sep_id = self.tokenizer.convert_tokens_to_ids(sep_token)
+        for item in dialogue:
+            role, content = item['role'], item['content']
+            tokens = self.tokenizer.encode(content, add_special_tokens=False)
+            input_ids.extend(tokens)
+            input_ids.append(sep_id)
+            role_ids.extend([role_map[role]] * (len(tokens) + 1))
+        
+        return {
+            "input_ids": input_ids,
+            "role_ids": role_ids
+        }
 
-def collate_batch(batch, tokenizer):
-    data = []
+def collate_batch(batch, tokenizer, max_len):
+    input_batch = []
+    role_batch = []
     
     for item in batch:
-        data.append(torch.LongTensor(item))
+        input_batch.append(torch.LongTensor(item['input_ids'][:max_len]))
+        role_batch.append(torch.LongTensor(item['role_ids'][:max_len]))
     
-    return pad_sequence(data, batch_first=True, padding_value=tokenizer.pad_id())
+    pad_token = tokenizer.special_tokens_map['pad_token']
+    pad_id = tokenizer.convert_tokens_to_ids(pad_token)
+    
+    input_batch = pad_sequence(input_batch, batch_first=True, padding_value=pad_id)
+    role_batch = pad_sequence(role_batch, batch_first=True, padding_value=-1)
+    return input_batch, role_batch
 
 def create_dataloader(tokenizer, batch_size, max_len=512, shuffle=False, drop_last=False):
-    dataset = TextDataset(corpus_file, tokenizer, max_len)
+    dataset = DialogueDataset(corpus_file, tokenizer)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,
-        collate_fn=lambda batch: collate_batch(batch, tokenizer))
+        collate_fn=lambda batch: collate_batch(batch, tokenizer, max_len))

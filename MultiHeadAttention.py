@@ -76,7 +76,7 @@ class MultiHeadAttention(nn.Module):
         self.W_o = nn.Linear(d_model, d_model, bias=False)  # (d_model, d_model)
         
         self.attn = ScaledDotProductAttention(dropout)
-        
+    
     def forward(self, x, mask=None):
         """
         前向传播

@@ -55,7 +55,7 @@ class DialogueGPT(nn.Module):
         
         # 2. 位置编码
         position_emb = self.position_emb[:seq_len]
-
+        
         # 3. 角色编码
         role_emb = self.role_emb(role_ids)
         memory = emb + position_emb + role_emb  # (batch_size, seq_len, d_model)
