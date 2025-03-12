@@ -4,20 +4,28 @@ import torch
 from data import create_tokenizer
 from DialogueGPT import DialogueGPT
 
-def process_data(model, text, tokenizer, device='cpu'):
-    """处理输入数据并生成编码器输出"""
-    tokens = tokenizer.tokenize(text)[-model.max_seq_len:]
-    return torch.LongTensor(tokens).unsqueeze(0).to(device)
+ROLE_MAP = {"system": 0, "user": 1, "assistant": 2}
 
-def get_probs(model, input_ids, tokenizer, temperature=1.0, top_k=None):
-    """获取下一个token的概率分布"""
+def process_data(input_ids, role_ids, model, role, tokens, device='cpu'):
+    input_tensor = torch.LongTensor(tokens).unsqueeze(0).to(device)
+    role_tensor = torch.LongTensor([ROLE_MAP[role]] * len(tokens)).unsqueeze(0).to(device)
+    
+    input_ids = torch.cat([input_ids, input_tensor], dim=-1)[:, -model.max_seq_len:]
+    role_ids = torch.cat([role_ids, role_tensor], dim=-1)[:, -model.max_seq_len:]
+    
+    return input_ids, role_ids
+
+def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None):
     input_ids = input_ids[:, -model.max_seq_len:]
+    role_ids = role_ids[:, -model.max_seq_len:]
     
     pad_token = tokenizer.special_tokens_map['pad_token']
     pad_id = tokenizer.convert_tokens_to_ids(pad_token)
     mask = model.generate_mask(input_ids, pad_id)
+    
     with torch.no_grad():
-        output = model(input_ids, mask)
+        output = model(input_ids, role_ids, mask)
+    
     # 应用温度缩放
     output = output[:, -1] / temperature
     # Top-k 过滤
@@ -26,35 +34,26 @@ def get_probs(model, input_ids, tokenizer, temperature=1.0, top_k=None):
         output[indices_to_remove] = float('-inf')
     return torch.softmax(output, dim=-1)
 
-def greedy_decode(model, text, tokenizer, max_len=50, device='cpu'):
+def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=50, temperature=1.0, top_k=1):
     model.eval()
     
-    input_ids = process_data(model, text, tokenizer, device=device)
-    end_token = tokenizer.eos_id()
+    sep_token = tokenizer.special_tokens_map['sep_token']
+    sep_id = tokenizer.convert_tokens_to_ids(sep_token)
+    assistant_id = torch.LongTensor([ROLE_MAP['assistant']]).unsqueeze(0).to(device)
+    result = []
     
     for _ in range(max_len):
-        probs = get_probs(model, input_ids, tokenizer)
-        next_token = torch.argmax(probs, dim=-1, keepdim=True)
-        input_ids = torch.cat([input_ids, next_token], dim=-1)
-        if next_token.item() == end_token:
-            break
-    
-    return input_ids[0].cpu().tolist()
-
-def sampling_decode(model, text, tokenizer, max_len=50, temperature=1.0, top_k=1, device='cpu'):
-    model.eval()
-    
-    input_ids = process_data(model, text, tokenizer, device=device)
-    end_token = tokenizer.eos_id()
-    
-    for _ in range(max_len):
-        probs = get_probs(model, input_ids, tokenizer, temperature, top_k)
+        probs = get_probs(model, input_ids, role_ids, tokenizer, temperature, top_k)
         next_token = torch.multinomial(probs, num_samples=1)
         input_ids = torch.cat([input_ids, next_token], dim=-1)
-        if next_token.item() == end_token:
+        role_ids = torch.cat([role_ids, assistant_id], dim=-1)
+        result.append(next_token.item())
+        if result[-1] == sep_id:
             break
+    if result[-1] != sep_id:
+        result.append(sep_id)
     
-    return input_ids[0].cpu().tolist()
+    return result
 
 if __name__ == '__main__':
     tokenizer = create_tokenizer()
@@ -70,20 +69,26 @@ if __name__ == '__main__':
         checkpoint = torch.load(ckpt_path, weights_only=True)
         model.load_state_dict(checkpoint['model_state_dict'])
     
-    text = input('请输入中文句子：\n')
-    print('\ninput:', text)
+    input_ids = torch.LongTensor().unsqueeze(0).to(device)
+    role_ids = torch.LongTensor().unsqueeze(0).to(device)
     
-    predictions = greedy_decode(model, text, tokenizer, device=device)
-    print('\ngreedy decode:', tokenizer.detokenize(predictions))
+    sep_token = tokenizer.special_tokens_map['sep_token']
+    sep_id = tokenizer.convert_tokens_to_ids(sep_token)
     
-    # 技术文档生成（高确定性）
-    predictions = sampling_decode(model, text, tokenizer, max_len=50, temperature=0.7, top_k=3, device=device)
-    print('\nsampling decode(高确定性):', tokenizer.detokenize(predictions))
+    while True:
     
-    # 创意写作（高多样性）
-    predictions = sampling_decode(model, text, tokenizer, max_len=50, temperature=1.2, top_k=8, device=device)
-    print('\nsampling decode(高多样性):', tokenizer.detokenize(predictions))
-    
-    # 平衡模式
-    predictions = sampling_decode(model, text, tokenizer, max_len=50, temperature=0.9, top_k=5, device=device)
-    print('\nsampling decode(平衡模式):', tokenizer.detokenize(predictions))
+        text = input('user：')
+        
+        if text.strip() == '再见':
+            break
+        
+        tokens = tokenizer.encode(text, add_special_tokens=False)
+        tokens.append(sep_id)
+        
+        input_ids, role_ids = process_data(input_ids, role_ids, model, 'user', tokens, device=device)
+        
+        predictions = sampling_decode(model, input_ids, role_ids, tokenizer, max_len=50, temperature=0.9, top_k=5)
+        input_ids, role_ids = process_data(input_ids, role_ids, model, 'assistant', predictions, device=device)
+        
+        print('\nassistant：', tokenizer.decode(predictions, skip_special_tokens=True).replace(" ", ""))
+        print()

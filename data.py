@@ -12,6 +12,8 @@ from torch.nn.utils.rnn import pad_sequence
 corpus_file = 'cleaned_corpus.txt'
 model_dirname = 'tokenizer_chinese'
 
+ROLE_MAP = {"system": 0, "user": 1, "assistant": 2}
+
 def clean_text(text):
     # 定义正则表达式模式匹配对话块
     pattern = r'<\|start_header_id\|>(.*?)<\|end_header_id\|>\n\n(.*?)<\|eot_id\|>'
@@ -72,7 +74,6 @@ class DialogueDataset(Dataset):
         dialogue = self.data[idx]
         input_ids = []
         role_ids = []
-        role_map = {"system": 0, "user": 1, "assistant": 2}
         
         sep_token = self.tokenizer.special_tokens_map['sep_token']
         sep_id = self.tokenizer.convert_tokens_to_ids(sep_token)
@@ -81,7 +82,7 @@ class DialogueDataset(Dataset):
             tokens = self.tokenizer.encode(content, add_special_tokens=False)
             tokens.append(sep_id)
             input_ids.extend(tokens)
-            role_ids.extend([role_map[role]] * len(tokens))
+            role_ids.extend([ROLE_MAP[role]] * len(tokens))
         
         return {
             "input_ids": input_ids,
