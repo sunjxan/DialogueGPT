@@ -34,7 +34,7 @@ def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None
         output[indices_to_remove] = float('-inf')
     return torch.softmax(output, dim=-1)
 
-def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=50, temperature=1.0, top_k=1):
+def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperature=1.0, top_k=1):
     model.eval()
     
     sep_token = tokenizer.special_tokens_map['sep_token']
@@ -77,18 +77,28 @@ if __name__ == '__main__':
     
     while True:
     
-        text = input('user：')
+        while True:
+            try:
+                text = input('user：').strip()
+            except:
+                print()
+                exit()
+            
+            if text:
+                break
         
-        if text.strip() == '再见':
+        if text == '再见':
             break
+        
+        print('\nassistant：', end='')
         
         tokens = tokenizer.encode(text, add_special_tokens=False)
         tokens.append(sep_id)
         
         input_ids, role_ids = process_data(input_ids, role_ids, model, 'user', tokens, device=device)
         
-        predictions = sampling_decode(model, input_ids, role_ids, tokenizer, max_len=50, temperature=0.9, top_k=5)
+        predictions = sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperature=0.9, top_k=5)
         input_ids, role_ids = process_data(input_ids, role_ids, model, 'assistant', predictions, device=device)
         
-        print('\nassistant：', tokenizer.decode(predictions, skip_special_tokens=True).replace(" ", ""))
+        print(tokenizer.decode(predictions, skip_special_tokens=True).replace(" ", ""))
         print()
