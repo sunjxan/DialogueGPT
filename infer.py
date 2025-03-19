@@ -24,7 +24,11 @@ def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None
     mask = model.generate_mask(input_ids, pad_id)
     
     with torch.no_grad():
-        output = model(input_ids, role_ids, mask)
+        output = model(
+            input_ids=input_ids,
+            role_ids=role_ids,
+            mask=mask
+        )
     
     # 应用温度缩放
     output = output[:, -1] / temperature
@@ -76,10 +80,11 @@ if __name__ == '__main__':
     sep_id = tokenizer.convert_tokens_to_ids(sep_token)
     
     while True:
-    
+        
         while True:
             try:
-                text = input('user：').strip()
+                text = input('>>> ').strip()
+                print()
             except:
                 print()
                 exit()
@@ -87,10 +92,15 @@ if __name__ == '__main__':
             if text:
                 break
         
-        if text == '再见':
+        if text == '/exit':
             break
         
-        print('\nassistant：', end='')
+        if text == '/clear':
+            input_ids = torch.LongTensor().unsqueeze(0).to(device)
+            role_ids = torch.LongTensor().unsqueeze(0).to(device)
+            print('历史已清除')
+            print()
+            continue     
         
         tokens = tokenizer.encode(text, add_special_tokens=False)
         tokens.append(sep_id)
