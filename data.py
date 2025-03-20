@@ -77,12 +77,22 @@ class DialogueDataset(Dataset):
         
         sep_token = self.tokenizer.special_tokens_map['sep_token']
         sep_id = self.tokenizer.convert_tokens_to_ids(sep_token)
+        system_prompt = ''
         for item in dialogue:
-            role, content = item['role'], item['content']
-            tokens = self.tokenizer.encode(content, add_special_tokens=False)
+            if item['role'] == 'system':
+                system_prompt += item['content']
+        tokens = self.tokenizer.encode(system_prompt, add_special_tokens=False)
+        if tokens:
             tokens.append(sep_id)
             input_ids.extend(tokens)
             role_ids.extend([ROLE_MAP[role]] * len(tokens))
+        for item in dialogue:
+            role, content = item['role'], item['content']
+            if role != 'system':
+                tokens = self.tokenizer.encode(content, add_special_tokens=False)
+                tokens.append(sep_id)
+                input_ids.extend(tokens)
+                role_ids.extend([ROLE_MAP[role]] * len(tokens))
         
         return {
             "input_ids": input_ids,
