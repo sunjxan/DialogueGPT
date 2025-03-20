@@ -75,22 +75,20 @@ class DialogueDataset(Dataset):
         input_ids = []
         role_ids = []
         
-        sep_token = self.tokenizer.special_tokens_map['sep_token']
-        sep_id = self.tokenizer.convert_tokens_to_ids(sep_token)
         system_prompt = ''
         for item in dialogue:
             if item['role'] == 'system':
                 system_prompt += item['content']
         tokens = self.tokenizer.encode(system_prompt, add_special_tokens=False)
         if tokens:
-            tokens.append(sep_id)
+            tokens.append(self.tokenizer.sep_token_id)
             input_ids.extend(tokens)
             role_ids.extend([ROLE_MAP[role]] * len(tokens))
         for item in dialogue:
             role, content = item['role'], item['content']
             if role != 'system':
                 tokens = self.tokenizer.encode(content, add_special_tokens=False)
-                tokens.append(sep_id)
+                tokens.append(self.tokenizer.sep_token_id)
                 input_ids.extend(tokens)
                 role_ids.extend([ROLE_MAP[role]] * len(tokens))
         
@@ -107,10 +105,7 @@ def collate_batch(batch, tokenizer, max_len):
         input_batch.append(torch.LongTensor(item['input_ids'][:max_len]))
         role_batch.append(torch.LongTensor(item['role_ids'][:max_len]))
     
-    pad_token = tokenizer.special_tokens_map['pad_token']
-    pad_id = tokenizer.convert_tokens_to_ids(pad_token)
-    
-    input_batch = pad_sequence(input_batch, batch_first=True, padding_value=pad_id)
+    input_batch = pad_sequence(input_batch, batch_first=True, padding_value=tokenizer.pad_token_id)
     role_batch = pad_sequence(role_batch, batch_first=True, padding_value=0)
     return input_batch, role_batch
 

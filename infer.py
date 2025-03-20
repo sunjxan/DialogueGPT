@@ -18,10 +18,7 @@ def process_data(input_ids, role_ids, model, role, tokens, device='cpu'):
 def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None):
     input_ids = input_ids[:, -model.max_seq_len:]
     role_ids = role_ids[:, -model.max_seq_len:]
-    
-    pad_token = tokenizer.special_tokens_map['pad_token']
-    pad_id = tokenizer.convert_tokens_to_ids(pad_token)
-    mask = model.generate_mask(input_ids, pad_id)
+    mask = model.generate_mask(input_ids, tokenizer.pad_token_id)
     
     with torch.no_grad():
         output = model(
@@ -41,8 +38,6 @@ def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None
 def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperature=1.0, top_k=1):
     model.eval()
     
-    sep_token = tokenizer.special_tokens_map['sep_token']
-    sep_id = tokenizer.convert_tokens_to_ids(sep_token)
     assistant_id = torch.LongTensor([ROLE_MAP['assistant']]).unsqueeze(0).to(device)
     result = []
     
@@ -52,10 +47,10 @@ def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperat
         input_ids = torch.cat([input_ids, next_token], dim=-1)
         role_ids = torch.cat([role_ids, assistant_id], dim=-1)
         result.append(next_token.item())
-        if result[-1] == sep_id:
+        if result[-1] == tokenizer.sep_token_id:
             break
-    if result[-1] != sep_id:
-        result.append(sep_id)
+    if result[-1] != tokenizer.sep_token_id:
+        result.append(tokenizer.sep_token_id)
     
     return result
 
@@ -75,9 +70,6 @@ if __name__ == '__main__':
     
     input_ids = torch.LongTensor().unsqueeze(0).to(device)
     role_ids = torch.LongTensor().unsqueeze(0).to(device)
-    
-    sep_token = tokenizer.special_tokens_map['sep_token']
-    sep_id = tokenizer.convert_tokens_to_ids(sep_token)
     
     while True:
         
@@ -103,7 +95,7 @@ if __name__ == '__main__':
             continue     
         
         tokens = tokenizer.encode(text, add_special_tokens=False)
-        tokens.append(sep_id)
+        tokens.append(tokenizer.sep_token_id)
         
         input_ids, role_ids = process_data(input_ids, role_ids, model, 'user', tokens, device=device)
         
