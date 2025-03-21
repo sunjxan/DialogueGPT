@@ -2,7 +2,7 @@ import os
 import torch
 
 from data import create_tokenizer
-from DialogueGPT import DialogueGPT
+from Transformer import Transformer
 
 ROLE_MAP = {"system": 0, "user": 1, "assistant": 2}
 
@@ -47,9 +47,9 @@ def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperat
         input_ids = torch.cat([input_ids, next_token], dim=-1)
         role_ids = torch.cat([role_ids, assistant_id], dim=-1)
         result.append(next_token.item())
-        if result[-1] == tokenizer.sep_token_id:
+        if next_token.item() == tokenizer.sep_token_id:
             break
-    if result[-1] != tokenizer.sep_token_id:
+    if not result or result[-1] != tokenizer.sep_token_id:
         result.append(tokenizer.sep_token_id)
     
     return result
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     tokenizer = create_tokenizer()
     
     # 创建模型
-    model = DialogueGPT(tokenizer.vocab_size)
+    model = Transformer(tokenizer.vocab_size)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
