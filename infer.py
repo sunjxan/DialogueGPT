@@ -55,6 +55,9 @@ def sampling_decode(model, input_ids, role_ids, tokenizer, max_len=100, temperat
     return result
 
 if __name__ == '__main__':
+    # 设置随机种子（保证可重复性）
+    torch.manual_seed(0)
+    
     tokenizer = create_tokenizer()
     
     # 创建模型
@@ -92,7 +95,7 @@ if __name__ == '__main__':
             role_ids = torch.LongTensor().unsqueeze(0).to(device)
             print('历史已清除')
             print()
-            continue     
+            continue
         
         tokens = tokenizer.encode(text, add_special_tokens=False)
         tokens.append(tokenizer.sep_token_id)
