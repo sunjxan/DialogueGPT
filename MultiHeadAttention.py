@@ -53,7 +53,7 @@ class ScaledDotProductAttention(nn.Module):
         output = torch.matmul(attn_weights, V)
         # output shape: (batch_size, num_heads, seq_len_q, d_v)
         
-        return output, attn_weights
+        return output
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, num_heads, dropout=0.1):
@@ -106,7 +106,7 @@ class MultiHeadAttention(nn.Module):
             # 扩展掩码维度以匹配多头 (batch_size, 1, seq_len, seq_len) -> 广播到num_heads
             mask = mask.unsqueeze(1)
         
-        output, attn_weights = self.attn(Q, K, V, mask)
+        output = self.attn(Q, K, V, mask)
         
         # 转置回维度 (batch_size, seq_len, num_heads, d_k)
         output = output.transpose(1, 2).contiguous()
