@@ -94,7 +94,7 @@ class Transformer(nn.Module):
         return torch.tril(torch.ones(seq_len, seq_len)) == 1  # (seq_len, seq_len)
     
     @classmethod
-    def generate_mask(cls, seq, pad_id=0):
+    def generate_mixed_mask(cls, seq, pad_id=0):
         '''结合填充掩码和因果掩码得到目标序列掩码'''
         return cls.generate_padding_mask(seq, pad_id) & cls.generate_causal_mask(seq.size(-1)).to(seq.device)   # (batch_size, seq_len, seq_len)
 

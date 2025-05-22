@@ -18,7 +18,7 @@ def process_data(input_ids, role_ids, model, role, tokens, device='cpu'):
 def get_probs(model, input_ids, role_ids, tokenizer, temperature=1.0, top_k=None):
     input_ids = input_ids[:, -model.max_seq_len:]
     role_ids = role_ids[:, -model.max_seq_len:]
-    mask = model.generate_mask(input_ids, tokenizer.pad_token_id)
+    mask = model.generate_mixed_mask(input_ids, tokenizer.pad_token_id)
     
     with torch.no_grad():
         output = model(
