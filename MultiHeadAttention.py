@@ -69,9 +69,9 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.d_k = d_model // num_heads  # 每个头的维度
         
-        # 线性变换矩阵（无偏置）
-        self.W_qkv = nn.Linear(d_model, 3 * d_model, bias=False)  # (d_model, 3*d_model) 合并QKV投影
-        self.W_o = nn.Linear(d_model, d_model, bias=False)  # (d_model, d_model)
+        # 线性变换矩阵
+        self.W_qkv = nn.Linear(d_model, 3 * d_model)  # (d_model, 3*d_model) 合并QKV投影
+        self.W_o = nn.Linear(d_model, d_model)  # (d_model, d_model)
         
         self.attn = ScaledDotProductAttention(dropout)
     
